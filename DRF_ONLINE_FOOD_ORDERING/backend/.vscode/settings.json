@@ -1,0 +1,72 @@
+{
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.include": [
+        "**/*.py"
+    ],
+    "python.analysis.exclude": [
+        "**/migrations/**",
+        "**/__pycache__/**",
+        "**/venv/**",
+        "**/.venv/**",
+        "**/node_modules/**"
+    ],
+    "python.analysis.ignore": [
+        "**/migrations/**"
+    ],
+    "python.analysis.stubPath": "./typings",
+    "python.analysis.extraPaths": [
+        ".",
+        "./core",
+        "./user_management"
+    ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnknownMemberType": "none",
+        "reportUnknownVariableType": "none",
+        "reportMissingTypeStubs": "none",
+        "reportUntypedBaseClass": "none",
+        "reportUntypedNamedTuple": "none",
+        "reportPrivateUsage": "none",
+        "reportConstantRedefinition": "none",
+        "reportIncompatibleMethodOverride": "none",
+        "reportIncompatibleVariableOverride": "none",
+        "reportInconsistentConstructor": "none",
+        "reportOverlappingOverloads": "none",
+        "reportUnusedClass": "none",
+        "reportUnusedFunction": "none",
+        "reportUnusedImport": "none",
+        "reportUnusedVariable": "none",
+        "reportDuplicateImport": "none",
+        "reportWildcardImportFromLibrary": "none",
+        "reportOptionalSubscript": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportOptionalCall": "none",
+        "reportOptionalIterable": "none",
+        "reportOptionalContextManager": "none",
+        "reportOptionalOperand": "none"
+    },
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.linting.mypyEnabled": false,
+    "python.linting.pycodestyleEnabled": false,
+    "python.linting.pydocstyleEnabled": false,
+    "python.linting.prospectorEnabled": false,
+    "python.linting.pylamaEnabled": false,
+    "python.linting.lintOnSave": true,
+    "python.terminal.activateEnvironment": true,
+    "python.defaultInterpreterPath": "./venv/Scripts/python.exe",
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.analysis.completeFunctionParens": true,
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.variableTypes": true,
+    "python.analysis.inlayHints.pytestParameters": true,
+    "python.analysis.inlayHints.callArgumentNames": "literals",
+    "python.analysis.inlayHints.pytestParameters": true,
+    "python.analysis.inlayHints.variableTypes": true,
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.callArgumentNames": "literals"
+} 

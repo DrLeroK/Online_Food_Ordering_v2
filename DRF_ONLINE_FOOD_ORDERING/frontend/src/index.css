@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+
+/* Add to your main CSS file */
+.chart-container {
+  position: relative;
+  margin: auto;
+}
+
+.chart-tooltip {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+}
+
+.chart-legend-color {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 4px;
+}
+
+/* In your main CSS file */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Fix for marker icons */
+.leaflet-div-icon {
+  background: transparent;
+  border: none;
+}

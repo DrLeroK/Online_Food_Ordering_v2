@@ -1,0 +1,91 @@
+[tool.pylsp-mypy]
+enabled = true
+live_mode = true
+strict = false
+
+[tool.pylsp-mypy.overrides]
+module = [
+    "django.*",
+    "rest_framework.*",
+    "core.*",
+    "user_management.*"
+]
+
+[tool.pyright]
+include = ["."]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/migrations",
+    "**/venv",
+    "**/.venv"
+]
+
+[tool.pyright.reportUnknownMemberType]
+severity = "none"
+
+[tool.pyright.reportUnknownVariableType]
+severity = "none"
+
+[tool.pyright.reportMissingTypeStubs]
+severity = "none"
+
+[tool.pyright.reportUntypedBaseClass]
+severity = "none"
+
+[tool.pyright.reportUntypedNamedTuple]
+severity = "none"
+
+[tool.pyright.reportPrivateUsage]
+severity = "none"
+
+[tool.pyright.reportConstantRedefinition]
+severity = "none"
+
+[tool.pyright.reportIncompatibleMethodOverride]
+severity = "none"
+
+[tool.pyright.reportIncompatibleVariableOverride]
+severity = "none"
+
+[tool.pyright.reportInconsistentConstructor]
+severity = "none"
+
+[tool.pyright.reportOverlappingOverloads]
+severity = "none"
+
+[tool.pyright.reportUnusedClass]
+severity = "none"
+
+[tool.pyright.reportUnusedFunction]
+severity = "none"
+
+[tool.pyright.reportUnusedImport]
+severity = "none"
+
+[tool.pyright.reportUnusedVariable]
+severity = "none"
+
+[tool.pyright.reportDuplicateImport]
+severity = "none"
+
+[tool.pyright.reportWildcardImportFromLibrary]
+severity = "none"
+
+[tool.pyright.reportOptionalSubscript]
+severity = "none"
+
+[tool.pyright.reportOptionalMemberAccess]
+severity = "none"
+
+[tool.pyright.reportOptionalCall]
+severity = "none"
+
+[tool.pyright.reportOptionalIterable]
+severity = "none"
+
+[tool.pyright.reportOptionalContextManager]
+severity = "none"
+
+[tool.pyright.reportOptionalOperand]
+severity = "none" 
