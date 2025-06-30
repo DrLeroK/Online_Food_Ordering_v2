@@ -40,18 +40,24 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
       } else {
-        setState(() {
-          _error = 'Invalid email or password';
-        });
+        if (mounted) {
+          setState(() {
+            _error = 'Invalid email or password';
+          });
+        }
       }
     } catch (e) {
-      setState(() {
-        _error = 'An error occurred. Please try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'An error occurred. Please try again.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {

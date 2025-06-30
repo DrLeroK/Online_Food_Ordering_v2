@@ -37,9 +37,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        _error = 'Passwords do not match';
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Passwords do not match';
+        });
+      }
       return;
     }
 
@@ -68,14 +70,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       } else {
-        setState(() {
-          _error = 'Registration failed. Please try again.';
-        });
+        if (mounted) {
+          setState(() {
+            _error = 'Registration failed. Please try again.';
+          });
+        }
       }
     } catch (e) {
-      setState(() {
-        _error = 'An error occurred. Please try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'An error occurred. Please try again.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {

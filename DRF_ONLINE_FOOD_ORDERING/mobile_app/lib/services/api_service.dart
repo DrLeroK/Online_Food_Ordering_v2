@@ -15,7 +15,7 @@ class ApiService {
   Future<Map<String, String>> get _headers async {
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
+      if (token != null) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -101,18 +101,16 @@ class ApiService {
     }
   }
 
-  Future<bool> addToCart(int itemId, int quantity) async {
+  Future<bool> addToCart(String slug, int quantity) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/cart/add/'),
+        Uri.parse('$baseUrl/cart/items/add/$slug/'),
         headers: await _headers,
         body: jsonEncode({
-          'item_id': itemId,
           'quantity': quantity,
         }),
       );
-
-      return response.statusCode == 200;
+      return response.statusCode == 201;
     } catch (e) {
       print('Add to cart error: $e');
       return false;
@@ -172,9 +170,12 @@ class ApiService {
     String? deliveryAddress,
   }) async {
     try {
+      final headers = await _headers;
+      headers['User-Agent'] = 'AtlasBurger-Flutter-Mobile-App';
+      
       final response = await http.post(
         Uri.parse('$baseUrl/payments/initiate/'),
-        headers: await _headers,
+        headers: headers,
         body: jsonEncode({
           'amount': amount,
           'delivery_option': deliveryOption,
@@ -191,6 +192,22 @@ class ApiService {
       return null;
     } catch (e) {
       print('Initiate payment error: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getProfile() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user_management/users/me/'),
+        headers: await _headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Get profile error: $e');
       return null;
     }
   }

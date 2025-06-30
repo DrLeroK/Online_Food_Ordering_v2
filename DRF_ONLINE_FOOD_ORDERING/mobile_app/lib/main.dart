@@ -8,9 +8,20 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/payment_success_screen.dart';
+import 'package:app_links/app_links.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("Warning: Could not load .env file: $e");
+    // Continue without .env file for web development
+  }
   final prefs = await SharedPreferences.getInstance();
   final apiService = ApiService(prefs);
 
@@ -26,12 +37,87 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  StreamSubscription? _linkSubscription;
+  final _appLinks = AppLinks();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinkHandling();
+  }
+
+  void _initDeepLinkHandling() {
+    // Handle app launch from deep link
+    _appLinks.getInitialAppLink().then((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri);
+      }
+    });
+
+    // Handle deep links when app is already running
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri);
+      }
+    }, onError: (err) {
+      print('Deep link error: $err');
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    print('Received deep link: $uri');
+    
+    try {
+      // Handle payment success/failure redirects
+      if (uri.scheme == 'atlasburger' || 
+          uri.host == 'atlasburger.com' ||
+          uri.host == 'localhost') {
+        
+        final status = uri.queryParameters['status'];
+        final orderId = uri.queryParameters['order_id'];
+        final txRef = uri.queryParameters['tx_ref'];
+        
+        // Navigate to payment success screen only if widget is mounted and navigator is ready
+        if (mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _navigatorKey.currentState != null) {
+              _navigatorKey.currentState!.pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (context) => PaymentSuccessScreen(
+                    orderId: orderId,
+                    status: status,
+                  ),
+                ),
+                (route) => false,
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error parsing deep link: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Food Ordering App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -73,6 +159,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
+        '/payment-success': (context) => const PaymentSuccessScreen(),
       },
     );
   }

@@ -31,9 +31,9 @@ class CartProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> addToCart(int itemId, int quantity) async {
+  Future<bool> addToCart(String slug, int quantity) async {
     try {
-      final success = await _apiService.addToCart(itemId, quantity);
+      final success = await _apiService.addToCart(slug, quantity);
       if (success) {
         await loadCart();
       }

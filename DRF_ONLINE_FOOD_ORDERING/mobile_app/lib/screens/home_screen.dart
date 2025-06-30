@@ -8,6 +8,7 @@ import 'order_history_screen.dart';
 import 'profile_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'item_detail_screen.dart';
+import '../providers/cart_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,8 +22,17 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Item> _items = [];
   bool _isLoading = true;
   String? _error;
-  String _selectedCategory = 'All';
-  List<String> _categories = ['All', 'Danger', 'Success', 'Primary', 'Info'];
+  String _selectedCategory = 'burger';
+  final List<Map<String, String>> _categories = [
+    {'value': 'burger', 'label': 'Burger'},
+    {'value': 'side', 'label': 'Side'},
+    {'value': 'drink', 'label': 'Drink'},
+    {'value': 'dessert', 'label': 'Dessert'},
+    {'value': 'pizza', 'label': 'Pizza'},
+    {'value': 'salad', 'label': 'Salad'},
+    {'value': 'sandwich', 'label': 'Sandwich'},
+    {'value': 'pasta', 'label': 'Pasta'},
+  ];
 
   // List of featured images (can be from network or assets)
   final List<String> _featuredImages = [
@@ -38,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadItems() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -45,19 +57,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final items = await context.read<ApiService>().getItems();
-      setState(() {
-        _items = items;
-      });
+      if (mounted) {
+        setState(() {
+          _items = items;
+        });
+      }
     } catch (e, stackTrace) {
       print('Error loading items: $e');
       print('Stack trace: $stackTrace');
-      setState(() {
-        _error = 'Failed to load menu items. Check console for details.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load menu items. Check console for details.';
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -102,6 +120,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCategoryBar() {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: _categories.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = _categories[index];
+          final isSelected = _selectedCategory == category['value'];
+          return ChoiceChip(
+            label: Text(category['label']!,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                )),
+            selected: isSelected,
+            selectedColor: Colors.redAccent,
+            backgroundColor: Colors.grey[200],
+            onSelected: (_) {
+              if (mounted) {
+                setState(() {
+                  _selectedCategory = category['value']!;
+                });
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildMenuContent() {
     return RefreshIndicator(
       onRefresh: _loadItems,
@@ -127,6 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
               : Column(
                   children: [
                     _buildFeaturedPromos(),
+                    _buildCategoryBar(),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.0),
                       child: Align(
@@ -150,9 +202,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
-                        itemCount: _items.length,
+                        itemCount: _items
+                            .where((item) => item.category.toLowerCase() == _selectedCategory)
+                            .length,
                         itemBuilder: (context, index) {
-                          final item = _items[index];
+                          final filteredItems = _items
+                              .where((item) => item.category.toLowerCase() == _selectedCategory)
+                              .toList();
+                          final item = filteredItems[index];
                           return _MenuItemCard(item: item);
                         },
                       ),
@@ -174,7 +231,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: _selectedIndex == 0
           ? AppBar(
-              title: const Text('Menu'),
+              title: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Atlas',
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'Cafe',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.logout),
@@ -215,10 +293,50 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _MenuItemCard extends StatelessWidget {
+class _MenuItemCard extends StatefulWidget {
   final Item item;
-
   const _MenuItemCard({required this.item});
+
+  @override
+  State<_MenuItemCard> createState() => _MenuItemCardState();
+}
+
+class _MenuItemCardState extends State<_MenuItemCard> {
+  int _quantity = 1;
+  bool _isLoading = false;
+
+  void _increment() {
+    setState(() {
+      _quantity++;
+    });
+  }
+
+  void _decrement() {
+    if (_quantity > 1) {
+      setState(() {
+        _quantity--;
+      });
+    }
+  }
+
+  Future<void> _addToCart() async {
+    setState(() {
+      _isLoading = true;
+    });
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final success = await cartProvider.addToCart(widget.item.slug, _quantity);
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Added to cart!' : 'Failed to add to cart'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +344,7 @@ class _MenuItemCard extends StatelessWidget {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ItemDetailScreen(item: item),
+            builder: (_) => ItemDetailScreen(item: widget.item),
           ),
         );
       },
@@ -244,9 +362,9 @@ class _MenuItemCard extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    child: item.image != null
+                    child: widget.item.image != null
                         ? CachedNetworkImage(
-                            imageUrl: item.image!,
+                            imageUrl: widget.item.image!,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => const Center(
                               child: CircularProgressIndicator(),
@@ -259,7 +377,7 @@ class _MenuItemCard extends StatelessWidget {
                             child: Icon(Icons.restaurant, size: 48),
                           ),
                   ),
-                  if (item.labels != null)
+                  if (widget.item.labels != null)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -269,11 +387,11 @@ class _MenuItemCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _getLabelColor(item.labelColour),
+                          color: _getLabelColor(widget.item.labelColour),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          item.labels!,
+                          widget.item.labels!,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -291,7 +409,7 @@ class _MenuItemCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
+                    widget.item.title,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -301,7 +419,7 @@ class _MenuItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.description,
+                    widget.item.description,
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
@@ -314,7 +432,7 @@ class _MenuItemCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'ETB ${item.price.toStringAsFixed(2)}',
+                        'ETB ${widget.item.price.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -331,13 +449,52 @@ class _MenuItemCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          _getSizeText(item.size),
+                          _getSizeText(widget.item.size),
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade700,
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: _quantity > 1 ? _decrement : null,
+                            iconSize: 18,
+                          ),
+                          Text('$_quantity', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: _increment,
+                            iconSize: 18,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      _isLoading
+                          ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                          : ElevatedButton.icon(
+                              icon: const Icon(Icons.add_shopping_cart, size: 16),
+                              label: const Text('Add to Cart', style: TextStyle(fontSize: 13)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                minimumSize: const Size(0, 32),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: _addToCart,
+                            ),
                     ],
                   ),
                 ],

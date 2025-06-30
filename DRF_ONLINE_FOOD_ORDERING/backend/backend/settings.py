@@ -245,6 +245,15 @@ FRONTEND_URL = 'http://localhost:5173'  # ← Changed to 5173
 DOMAIN = 'localhost:5173'               # ← Changed to 5173
 SITE_NAME = 'Atlas Burger'
 
+# Payment Settings
+CHAPA_API_URL = 'https://api.chapa.co/v1/transaction/initialize'
+CHAPA_SECRET_KEY = os.getenv('CHAPA_SECRET_KEY', '')
+CHAPA_WEBHOOK_URL = 'http://localhost:8000/payments/webhook/'
+CHAPA_RETURN_URL = 'atlasburger://payment-success?status=success'
+CHAPA_VERIFY_URL = 'https://api.chapa.co/v1/transaction/verify/'
 
+# Deep Link Settings
+MOBILE_APP_DEEP_LINK = 'atlasburger://payment-success'
+WEB_APP_URL = 'http://localhost:5173'
 
 # superuser : hp14
