@@ -34,9 +34,11 @@ const LandingPage = () => {
             >
               EXPLORE MENU
             </Link>
-            <button className="bg-transparent border-2 border-white hover:bg-white hover:text-gray-900 text-white font-bold py-4 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105">
+            <Link
+              to="/about" 
+              className="bg-transparent border-2 border-white hover:bg-white hover:text-gray-900 text-white font-bold py-4 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105">
               OUR STORY
-            </button>
+            </Link>
           </div>
         </div>
         
@@ -194,9 +196,11 @@ const LandingPage = () => {
             Visit us today or order online for pickup. Your taste buds will thank you!
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button className="bg-white text-red-600 hover:bg-gray-100 font-bold py-4 px-10 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+            <Link 
+              to="/contact"
+              className="bg-white text-red-600 hover:bg-gray-100 font-bold py-4 px-10 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
               FIND OUR LOCATION
-            </button>
+            </Link>
             <Link 
               to="/menu/items" 
               className="bg-transparent border-2 border-white hover:bg-white hover:text-red-600 font-bold py-4 px-10 rounded-full text-lg transition-all duration-300 transform hover:scale-105"
@@ -211,3 +215,7 @@ const LandingPage = () => {
 };
 
 export default LandingPage;
+
+
+
+// UPDATED PAGE NEEDS TO BE ADDED

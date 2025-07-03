@@ -8,6 +8,7 @@ import OrderDetailsModal from '../../components/Admin/OrderDetailsModal';
 import { ACCESS_TOKEN } from '../../constants';
 import { FaBell, FaEye, FaEyeSlash } from 'react-icons/fa';
 
+
 const AdminDashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -19,7 +20,8 @@ const AdminDashboardPage = () => {
     start: '',
     end: ''
   });
-  const [timeFilter, setTimeFilter] = useState('today');
+  // const [timeFilter, setTimeFilter] = useState('today');
+  const [timeFilter, setTimeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showStats, setShowStats] = useState(false);
   const [newOrders, setNewOrders] = useState([]);
@@ -27,6 +29,7 @@ const AdminDashboardPage = () => {
   const navigate = useNavigate();
 
   const ORDERS_PER_PAGE = 10;
+
 
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
@@ -41,6 +44,7 @@ const AdminDashboardPage = () => {
       return false;
     }
   };
+
 
   const handleCancel = async (orderId, reason) => {
     if (!reason) {
@@ -63,6 +67,7 @@ const AdminDashboardPage = () => {
       setLoading(false);
     }
   };
+
 
   const fetchDashboardData = async () => {
     try {
@@ -148,14 +153,17 @@ const AdminDashboardPage = () => {
     }
   };
 
+
   useEffect(() => {
     fetchDashboardData();
   }, [dateRange]);
+
 
   useEffect(() => {
     setFilteredOrders(applyTimeFilter());
     setCurrentPage(1); // Reset to first page when filter changes
   }, [timeFilter, orders]);
+
 
   // Pagination logic
   const totalPages = Math.ceil(filteredOrders.length / ORDERS_PER_PAGE);
@@ -167,6 +175,8 @@ const AdminDashboardPage = () => {
   if (loading) return <div className="flex justify-center items-center h-64">Loading admin dashboard...</div>;
   if (error) return <div className="text-red-500 p-4">{error}</div>;
 
+
+  
   return (
     <div className="space-y-6">
       {/* Notification for new orders */}
@@ -304,3 +314,12 @@ const AdminDashboardPage = () => {
 };
 
 export default AdminDashboardPage;
+
+
+
+
+
+
+
+
+// THIS PAGE IS UPDATED

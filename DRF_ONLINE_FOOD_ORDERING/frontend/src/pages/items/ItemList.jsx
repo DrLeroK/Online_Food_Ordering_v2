@@ -6,6 +6,7 @@ import { FaUtensils, FaArrowRight, FaFilter, FaShoppingCart, FaPlus, FaMinus } f
 import { ACCESS_TOKEN } from '../../constants';
 
 const ItemList = () => {
+  
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -47,7 +47,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link 
-                  to="/menu" 
+                  to="/menu/items" 
                   className="text-gray-300 hover:text-red-600 transition-colors duration-300 flex items-center"
                 >
                   <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
@@ -121,3 +121,8 @@ const Footer = () => {
 };
 
 export default Footer;
+
+
+
+
+// UPDATED PAGE NEED TO BE INSERTED TO THE MAIN ONE
