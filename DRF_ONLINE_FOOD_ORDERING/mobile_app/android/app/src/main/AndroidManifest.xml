@@ -39,6 +39,12 @@
                 <data android:scheme="http" android:host="atlasburger.com" />
                 <data android:scheme="https" android:host="atlasburger.com" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="atlasburger" android:host="password-reset-confirm" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

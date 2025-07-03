@@ -49,6 +49,8 @@ const CartPage = () => {
   const [locationError, setLocationError] = useState(null);
   const mapRef = useRef(null);
   const navigate = useNavigate();
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
 
   // Default coordinates for the map center (Addis Ababa coordinates)
   const defaultPosition = [9.0054, 38.7636];
@@ -134,6 +136,23 @@ const CartPage = () => {
     );
   };
 
+  const initiatePayment = async (amount) => {
+    setPaymentLoading(true);
+    setPaymentError(null);
+    try {
+      const response = await api.post('/payments/initiate/', { amount });
+      if (response.data.checkout_url) {
+        window.location.href = response.data.checkout_url;
+      } else {
+        setPaymentError('Failed to get payment link.');
+      }
+    } catch (err) {
+      setPaymentError(err.response?.data?.error || 'Payment initiation failed.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const placeOrder = async () => {
     setOrderLoading(true);
     try {
@@ -146,10 +165,12 @@ const CartPage = () => {
         latitude: deliveryOption === 'delivery' && position ? position.lat : null,
         longitude: deliveryOption === 'delivery' && position ? position.lng : null
       };
-
+      // Place order first (optional: you may want to do this after payment success)
       await api.post('/orders/', orderData);
-      setCartItems([]);
-      navigate('/order-history');
+      // Initiate payment for the total amount
+      await initiatePayment(calculateGrandTotal());
+      // setCartItems([]); // Only clear cart after payment success
+      // navigate('/order-history');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to place order');
     } finally {
@@ -439,23 +460,24 @@ const CartPage = () => {
               </button>
               <button
                 onClick={placeOrder}
-                disabled={orderLoading || (deliveryOption === 'delivery' && !deliveryAddress && !position)}
+                disabled={orderLoading || paymentLoading || (deliveryOption === 'delivery' && !deliveryAddress && !position)}
                 className={`w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg font-medium flex items-center justify-center ${
-                  orderLoading || (deliveryOption === 'delivery' && !deliveryAddress && !position) ? 'opacity-70 cursor-not-allowed' : ''
+                  orderLoading || paymentLoading || (deliveryOption === 'delivery' && !deliveryAddress && !position) ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
-                {orderLoading ? (
+                {orderLoading || paymentLoading ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Placing Order...
+                    Processing...
                   </>
                 ) : (
-                  'Place Order'
+                  'Place Order & Pay'
                 )}
               </button>
+              {paymentError && <p className="text-red-500 text-sm text-center mt-2">{paymentError}</p>}
               {deliveryOption === 'delivery' && !deliveryAddress && !position && (
                 <p className="text-red-500 text-sm text-center">
                   Please provide either a delivery address or select your location on the map

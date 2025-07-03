@@ -9,10 +9,12 @@ import 'screens/login_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/payment_success_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,7 @@ void main() async {
     // Continue without .env file for web development
   }
   final prefs = await SharedPreferences.getInstance();
-  final apiService = ApiService(prefs);
+  final apiService = ApiService();
 
   runApp(
     MultiProvider(
@@ -45,73 +47,62 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  StreamSubscription? _linkSubscription;
-  final _appLinks = AppLinks();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription? _sub;
 
   @override
   void initState() {
     super.initState();
-    _initDeepLinkHandling();
-  }
-
-  void _initDeepLinkHandling() {
-    // Handle app launch from deep link
-    _appLinks.getInitialAppLink().then((uri) {
-      if (uri != null) {
-        _handleDeepLink(uri);
-      }
-    });
-
-    // Handle deep links when app is already running
-    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
-      if (uri != null) {
-        _handleDeepLink(uri);
-      }
-    }, onError: (err) {
-      print('Deep link error: $err');
-    });
-  }
-
-  void _handleDeepLink(Uri uri) {
-    print('Received deep link: $uri');
-    
-    try {
-      // Handle payment success/failure redirects
-      if (uri.scheme == 'atlasburger' || 
-          uri.host == 'atlasburger.com' ||
-          uri.host == 'localhost') {
-        
-        final status = uri.queryParameters['status'];
-        final orderId = uri.queryParameters['order_id'];
-        final txRef = uri.queryParameters['tx_ref'];
-        
-        // Navigate to payment success screen only if widget is mounted and navigator is ready
-        if (mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _navigatorKey.currentState != null) {
-              _navigatorKey.currentState!.pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (context) => PaymentSuccessScreen(
-                    orderId: orderId,
-                    status: status,
-                  ),
-                ),
-                (route) => false,
-              );
-            }
-          });
-        }
-      }
-    } catch (e) {
-      print('Error parsing deep link: $e');
+    if (!kIsWeb) {
+      _handleInitialLink();
+      _handleIncomingLinks();
     }
+    // Check authentication status on startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().checkAuthStatus();
+    });
   }
 
   @override
   void dispose() {
-    _linkSubscription?.cancel();
+    _sub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _handleInitialLink() async {
+    try {
+      final appLinks = AppLinks();
+      final initialUri = await appLinks.getInitialAppLink();
+      if (initialUri != null) {
+        _navigateToResetScreen(initialUri);
+      }
+    } on PlatformException {
+      // Handle exception
+    }
+  }
+
+  void _handleIncomingLinks() {
+    final appLinks = AppLinks();
+    _sub = appLinks.uriLinkStream.listen((Uri? uri) {
+      if (!mounted || uri == null) return;
+      _navigateToResetScreen(uri);
+    }, onError: (Object err) {
+      // Handle exception
+    });
+  }
+
+  void _navigateToResetScreen(Uri uri) {
+    if (uri.scheme == 'atlasburger' && uri.host == 'password-reset-confirm') {
+      final uid = uri.pathSegments.length > 0 ? uri.pathSegments[0] : null;
+      final token = uri.pathSegments.length > 1 ? uri.pathSegments[1] : null;
+      if (uid != null && token != null) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(uid: uid, token: token),
+          ),
+        );
+      }
+    }
   }
 
   @override

@@ -6,6 +6,7 @@ import '../models/cart_item.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'payment_success_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -23,7 +24,12 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<CartProvider>().loadCart();
+    // Use post frame callback to avoid calling setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<CartProvider>().loadCart();
+      }
+    });
   }
 
   @override
@@ -71,6 +77,22 @@ class _CartScreenState extends State<CartScreen> {
       final pickupTime = deliveryOption == 'pickup' ? _selectedTime.toIso8601String() : null;
       final deliveryAddress = deliveryOption == 'delivery' ? _addressController.text.trim() : null;
 
+      // Create order before payment
+      final orderCreated = await apiService.createOrder(
+        deliveryOption: deliveryOption,
+        deliveryTime: deliveryTime,
+        pickupTime: pickupTime,
+        deliveryAddress: deliveryAddress,
+      );
+      if (!orderCreated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create order'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
       final checkoutUrl = await apiService.initiatePayment(
         amount: amount,
         deliveryOption: deliveryOption,
@@ -79,14 +101,33 @@ class _CartScreenState extends State<CartScreen> {
         deliveryAddress: deliveryAddress,
       );
       if (checkoutUrl != null && mounted) {
-        final uri = Uri.parse(checkoutUrl);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        // For mock payments, directly navigate to success screen
+        if (checkoutUrl.startsWith('atlasburger://')) {
+          final uri = Uri.parse(checkoutUrl);
+          final status = uri.queryParameters['status'];
+          final orderId = uri.queryParameters['order_id'];
+          
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => PaymentSuccessScreen(
+                status: status,
+                orderId: orderId,
+              ),
+            ),
+          );
         } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Could not launch payment page'), backgroundColor: Colors.red),
-            );
+          // For real Chapa payments, launch the payment page
+          final uri = Uri.parse(checkoutUrl);
+          print('Attempting to launch: $checkoutUrl');
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } else {
+            print('Could not launch URL: $checkoutUrl');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Could not launch payment page'), backgroundColor: Colors.red),
+              );
+            }
           }
         }
       }
@@ -217,31 +258,43 @@ class _CartScreenState extends State<CartScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _sectionHeader('Delivery Options'),
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Radio<String>(
-                                value: 'pickup',
-                                groupValue: _deliveryOption,
-                                activeColor: Colors.red,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _deliveryOption = value!;
-                                  });
-                                },
+                              Row(
+                                children: [
+                                  Radio<String>(
+                                    value: 'pickup',
+                                    groupValue: _deliveryOption,
+                                    activeColor: Colors.red,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _deliveryOption = value!;
+                                      });
+                                    },
+                                  ),
+                                  const Expanded(
+                                    child: Text('Pickup from Restaurant', style: TextStyle(fontSize: 16)),
+                                  ),
+                                ],
                               ),
-                              const Text('Pickup from Restaurant', style: TextStyle(fontSize: 16)),
-                              const SizedBox(width: 16),
-                              Radio<String>(
-                                value: 'delivery',
-                                groupValue: _deliveryOption,
-                                activeColor: Colors.red,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _deliveryOption = value!;
-                                  });
-                                },
+                              Row(
+                                children: [
+                                  Radio<String>(
+                                    value: 'delivery',
+                                    groupValue: _deliveryOption,
+                                    activeColor: Colors.red,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _deliveryOption = value!;
+                                      });
+                                    },
+                                  ),
+                                  const Expanded(
+                                    child: Text('Delivery to Address', style: TextStyle(fontSize: 16)),
+                                  ),
+                                ],
                               ),
-                              const Text('Delivery to Address', style: TextStyle(fontSize: 16)),
                             ],
                           ),
                           const SizedBox(height: 16),

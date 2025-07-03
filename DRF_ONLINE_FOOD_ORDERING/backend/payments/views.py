@@ -17,8 +17,13 @@ class PaymentAndOrderCreateView(APIView):
 
     def post(self, request):
         try:
+            print(f"DEBUG: Received data: {request.data}")
+            print(f"DEBUG: User: {request.user}")
+            
             # Get cart items
             cart_items = CartItems.objects.filter(user=request.user)
+            print(f"DEBUG: Cart items count: {cart_items.count()}")
+            
             if not cart_items.exists():
                 return Response(
                     {"error": "Cart is empty"},
@@ -26,15 +31,27 @@ class PaymentAndOrderCreateView(APIView):
                 )
 
             # Create order
-            order = Order.objects.create(
-                user=request.user,
-                delivery_option=request.data.get('delivery_option', 'pickup'),
-                delivery_address=request.data.get('delivery_address'),
-                delivery_time=request.data.get('delivery_time'),
-                pickup_time=request.data.get('pickup_time'),
-                total_price=sum(item.item.price * item.quantity for item in cart_items),
-                status='pending'
-            )
+            delivery_option = request.data.get('delivery_option', 'pickup')
+            print(f"DEBUG: Delivery option: {delivery_option}")
+            
+            try:
+                order = Order.objects.create(
+                    user=request.user,
+                    delivery_option=delivery_option,
+                    delivery_address=request.data.get('delivery_address'),
+                    delivery_time=request.data.get('delivery_time'),
+                    pickup_time=request.data.get('pickup_time'),
+                    pickup_branch='atlas1' if delivery_option == 'pickup' else None,  # Set default branch for pickup
+                    total_price=sum(item.item.price * item.quantity for item in cart_items),
+                    status='pending'
+                )
+                print(f"DEBUG: Order created successfully with ID: {order.id}")
+            except Exception as order_error:
+                print(f"DEBUG: Order creation failed: {order_error}")
+                return Response(
+                    {"error": f"Order creation failed: {str(order_error)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             # Associate cart items with order
             for cart_item in cart_items:
@@ -54,7 +71,12 @@ class PaymentInitiateView(APIView):
 
     def post(self, request):
         try:
+            print(f"DEBUG PAYMENT: Received data: {request.data}")
+            print(f"DEBUG PAYMENT: User: {request.user}")
+            
             amount = request.data.get('amount')
+            print(f"DEBUG PAYMENT: Amount: {amount}")
+            
             if not amount:
                 return Response(
                     {"error": "Amount is required"},
@@ -69,31 +91,43 @@ class PaymentInitiateView(APIView):
             is_mobile_app = 'flutter' in user_agent or 'mobile' in user_agent
             
             if is_mobile_app:
-                return_url = f"{settings.MOBILE_APP_DEEP_LINK}?status=success&tx_ref={tx_ref}"
+                return_url = f"http://10.0.2.2:8000/payments/success/?status=success&tx_ref={tx_ref}"
             else:
                 return_url = f"{settings.WEB_APP_URL}/payment-success?status=success&tx_ref={tx_ref}"
 
             # Check if Chapa API key is available
+            print(f"DEBUG PAYMENT: CHAPA_SECRET_KEY exists: {bool(settings.CHAPA_SECRET_KEY)}")
+            
+            # Use mock payments only if CHAPA_SECRET_KEY is not available
             if not settings.CHAPA_SECRET_KEY:
                 # For testing purposes, return a mock checkout URL
                 print("Warning: CHAPA_SECRET_KEY not set. Using mock payment for testing.")
                 
-                # Save transaction to DB for testing
-                PaymentTransaction.objects.create(
-                    tx_ref=tx_ref,
-                    amount=amount,
-                    email=request.user.email,
-                    first_name=request.user.first_name if request.user.first_name else "Customer",
-                    last_name=request.user.last_name if request.user.last_name else "",
-                    phone_number=request.user.phone_number,
-                    user=request.user
-                )
-                
-                # Return a mock checkout URL that redirects to the deep link
-                mock_checkout_url = f"http://localhost:8000/payments/webhook/?trx_ref={tx_ref}&status=success"
-                return Response({
-                    "checkout_url": mock_checkout_url
-                })
+                try:
+                    # Save transaction to DB for testing
+                    transaction = PaymentTransaction.objects.create(
+                        tx_ref=tx_ref,
+                        amount=amount,
+                        email=request.user.email,
+                        first_name=request.user.first_name if request.user.first_name else "Customer",
+                        last_name=request.user.last_name if request.user.last_name else "",
+                        phone_number=request.user.phone_number,
+                        user=request.user
+                    )
+                    print(f"DEBUG PAYMENT: Transaction created with ID: {transaction.id}")
+                    
+                    # Return a mock checkout URL that works with mobile app
+                    mock_checkout_url = f"atlasburger://payment-success?status=success&tx_ref={tx_ref}&order_id={tx_ref}"
+                    print(f"DEBUG PAYMENT: Returning mock checkout URL: {mock_checkout_url}")
+                    return Response({
+                        "checkout_url": mock_checkout_url
+                    })
+                except Exception as transaction_error:
+                    print(f"DEBUG PAYMENT: Transaction creation failed: {transaction_error}")
+                    return Response(
+                        {"error": f"Transaction creation failed: {str(transaction_error)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
             # Prepare payload for Chapa API
             payload = {
@@ -110,6 +144,9 @@ class PaymentInitiateView(APIView):
             if request.user.phone_number:
                 payload["phone_number"] = request.user.phone_number
 
+            print(f"DEBUG PAYMENT: Chapa payload: {payload}")
+            print(f"DEBUG PAYMENT: Chapa API URL: {settings.CHAPA_API_URL}")
+
             # Headers with API key
             headers = {
                 "Authorization": f"Bearer {settings.CHAPA_SECRET_KEY}",
@@ -117,7 +154,11 @@ class PaymentInitiateView(APIView):
             }
 
             # Initialize payment with Chapa API
+            print("DEBUG PAYMENT: Making Chapa API request...")
             response = requests.post(settings.CHAPA_API_URL, json=payload, headers=headers)
+            print(f"DEBUG PAYMENT: Chapa response status: {response.status_code}")
+            print(f"DEBUG PAYMENT: Chapa response: {response.text}")
+            
             response_data = response.json()
 
             if response.status_code == 200 and response_data['status'] == 'success':
@@ -136,8 +177,10 @@ class PaymentInitiateView(APIView):
                     "checkout_url": response_data['data']['checkout_url']
                 })
             else:
+                print(f"DEBUG PAYMENT: Chapa API failed with status {response.status_code}")
+                print(f"DEBUG PAYMENT: Chapa error response: {response_data}")
                 return Response(
-                    {"error": "Payment initiation failed"},
+                    {"error": f"Payment initiation failed: {response_data.get('message', 'Unknown error')}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 

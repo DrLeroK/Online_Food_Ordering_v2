@@ -3,6 +3,8 @@ import '../models/item.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
+import '../models/review.dart';
+import '../services/api_service.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   final Item item;
@@ -15,6 +17,71 @@ class ItemDetailScreen extends StatefulWidget {
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
   int _quantity = 1;
   bool _isLoading = false;
+
+  // Review-related state
+  List<Review> _reviews = [];
+  bool _reviewsLoading = true;
+  String? _reviewsError;
+  final TextEditingController _reviewController = TextEditingController();
+  bool _submittingReview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    setState(() {
+      _reviewsLoading = true;
+      _reviewsError = null;
+    });
+    try {
+      final api = ApiService();
+      final reviews = await api.fetchReviews(widget.item.slug);
+      setState(() {
+        _reviews = reviews;
+        _reviewsLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _reviewsError = 'Failed to load reviews';
+        _reviewsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _submitReview() async {
+    final text = _reviewController.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _submittingReview = true;
+    });
+    final api = ApiService();
+    final success = await api.submitReview(widget.item.slug, text);
+    if (mounted) {
+      setState(() {
+        _submittingReview = false;
+      });
+      if (success) {
+        _reviewController.clear();
+        _fetchReviews();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Review submitted!'), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit review'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _reviewController.dispose();
+    super.dispose();
+  }
 
   void _increment() {
     setState(() {
@@ -195,6 +262,65 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                         ],
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+            // --- REVIEWS SECTION ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  const Text('Reviews', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  if (_reviewsLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_reviewsError != null)
+                    Text(_reviewsError!, style: const TextStyle(color: Colors.red))
+                  else if (_reviews.isEmpty)
+                    const Text('No reviews yet.')
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _reviews.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (context, index) {
+                        final review = _reviews[index];
+                        return ListTile(
+                          leading: const Icon(Icons.person, color: Colors.grey),
+                          title: Text(review.review),
+                          subtitle: Text('Posted on: '
+                              '${review.postedOn.toLocal().toString().split(".")[0]}'),
+                        );
+                      },
+                    ),
+                  const SizedBox(height: 16),
+                  const Text('Add a Review', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _reviewController,
+                          decoration: const InputDecoration(
+                            hintText: 'Write your review...',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          minLines: 1,
+                          maxLines: 3,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _submittingReview
+                          ? const CircularProgressIndicator()
+                          : IconButton(
+                              icon: const Icon(Icons.send, color: Colors.red),
+                              onPressed: _submittingReview ? null : _submitReview,
+                            ),
+                    ],
                   ),
                 ],
               ),

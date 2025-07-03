@@ -141,11 +141,6 @@ class Order(models.Model):
                 raise ValidationError({
                     'delivery_address': 'Either delivery address or location coordinates are required for delivery'
                 })
-            
-        if self.delivery_option == 'pickup' and not self.pickup_branch:
-            raise ValidationError({
-                'pickup_branch': 'Pickup branch is required for pickup orders'
-            })
 
 
 # a model for the cart items

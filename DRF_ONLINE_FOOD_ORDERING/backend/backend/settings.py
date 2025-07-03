@@ -71,7 +71,7 @@ DEFAULT_FROM_EMAIL = 'Atlas Burger <lateradrj94@gmail.com>'  # Shows in recipien
 
 
 DJOSER = {
-    'PASSWORD_RESET_CONFIRM_URL': 'password-reset-confirm/{uid}/{token}',
+    'PASSWORD_RESET_CONFIRM_URL': 'atlasburger://password-reset-confirm/{uid}/{token}',
     'USERNAME_RESET_CONFIRM_URL': 'auth/username/reset/confirm/{uid}/{token}',
     'ACTIVATION_URL': 'auth/activate/{uid}/{token}',
     'SEND_ACTIVATION_EMAIL': False,

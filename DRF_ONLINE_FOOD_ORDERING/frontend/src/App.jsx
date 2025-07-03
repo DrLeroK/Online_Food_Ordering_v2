@@ -32,6 +32,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPasswordConfirm from './pages/ResetPasswordConfirm';
+import PaymentSuccess from './pages/paymentSuccess';
+import PaymentFailed from './pages/paymentFailed';
 
 
 function App() {
@@ -100,6 +102,8 @@ function App() {
 
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/password-reset-confirm/:uid/:token" element={<ResetPasswordConfirm />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/payment-failed" element={<PaymentFailed />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>

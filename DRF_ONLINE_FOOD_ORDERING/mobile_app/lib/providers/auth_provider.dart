@@ -6,7 +6,7 @@ class AuthProvider with ChangeNotifier {
   bool _isAuthenticated = false;
 
   AuthProvider(this._apiService) {
-    _isAuthenticated = _apiService.token != null;
+    _isAuthenticated = false;
   }
 
   bool get isAuthenticated => _isAuthenticated;
@@ -16,12 +16,39 @@ class AuthProvider with ChangeNotifier {
     if (success) {
       _isAuthenticated = true;
       notifyListeners();
+    } else {
+      _isAuthenticated = false;
+      notifyListeners();
     }
     return success;
   }
 
-  Future<bool> register(String username, String firstName, String lastName, String email, String phone, String password) async {
-    return await _apiService.register(username, firstName, lastName, email, phone, password);
+  Future<Map<String, dynamic>> register(String username, String firstName, String lastName, String email, String phone, String password) async {
+    try {
+      final success = await _apiService.register(username, firstName, lastName, email, phone, password);
+      return {'success': success, 'errors': null};
+    } catch (e) {
+      return {'success': false, 'errors': e.toString()};
+    }
+  }
+
+  Future<void> forgotPassword(String email) async {
+    await _apiService.forgotPassword(email);
+  }
+
+  Future<bool> resetPassword(String uid, String token, String newPassword) async {
+    return await _apiService.resetPassword(uid, token, newPassword);
+  }
+
+  Future<void> checkAuthStatus() async {
+    try {
+      final profile = await _apiService.getProfile();
+      _isAuthenticated = profile != null;
+      notifyListeners();
+    } catch (e) {
+      _isAuthenticated = false;
+      notifyListeners();
+    }
   }
 
   void logout() {
