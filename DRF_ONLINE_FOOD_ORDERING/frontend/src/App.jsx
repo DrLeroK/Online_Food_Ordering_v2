@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import NotFound from "./pages/NotFound";
 import AboutPage from "./pages/AboutPage";
+import ContactPage from "./pages/ContactPage";
 import ItemCreate from "./pages/items/ItemCreate";
 import ItemEdit from "./pages/items/ItemEdit";
 import ItemList from "./pages/items/ItemList";
@@ -21,17 +22,17 @@ import CartPage from "./pages/cart/CartPage";
 import OrderHistoryPage from "./pages/orders/OrderHistoryPage";
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import AdminItems from './pages/admin/AdminItems';
-// import AdminSales from './pages/admin/AdminSales';    
+import AdminItems from './pages/admin/AdminItems';    
 import AdminTopItems from './pages/admin/AdminTopItems';
-
-import SalesAnalytics from './pages/admin/SalesAnalytics'; // Import the new component
+import SalesAnalytics from './pages/admin/SalesAnalytics'; 
 
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPasswordConfirm from './pages/ResetPasswordConfirm';
+
+import ProfilePage from "./pages/ProfilePage";
 
 
 function App() {
@@ -93,6 +94,7 @@ function App() {
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} setIsAdmin={setIsAdmin}  />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/menu/items" element={<ItemList />} />
@@ -105,6 +107,7 @@ function App() {
           <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
             <Route path="/cart" element={<CartPage />} />
             <Route path="/order-history" element={<OrderHistoryPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           {/* Admin routes */}
@@ -135,3 +138,8 @@ function App() {
 }
 
 export default App;
+
+
+
+
+// UPDATED PAGE NEED TO BE INSERTED TO THE MAIN ONE

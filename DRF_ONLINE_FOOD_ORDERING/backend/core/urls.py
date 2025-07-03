@@ -3,8 +3,8 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ItemListCreateView, ItemDetailView,
-    ReviewListCreateView, CartListView, 
-    CartDetailView, ClearCartView, 
+    ReviewListCreateView, ReviewDeleteView, 
+    CartListView, CartDetailView, ClearCartView, 
     RemoveFromCartView, OrderCreateView, 
     OrderHistoryView, AdminOrderViewSet
 )
@@ -24,6 +24,9 @@ urlpatterns = [
 
     # Review Endpoints
     path('menu/items/<slug:slug>/reviews/', ReviewListCreateView.as_view(), name='review-list'),
+
+    # DELETE REVIEW ENDPOINT......... NEEDS TO BE ADDED TO THE MAIN ONE
+    path('reviews/<int:pk>/delete/', ReviewDeleteView.as_view(), name='admin-review-delete'),
 
     # Cart Endpoints
     path('cart/items/add/<slug:slug>/', CartListView.as_view(), name='add-to-cart'),

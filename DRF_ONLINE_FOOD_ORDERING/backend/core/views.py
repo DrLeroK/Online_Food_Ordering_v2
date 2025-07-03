@@ -13,6 +13,8 @@ from rest_framework.permissions import IsAdminUser
 
 from rest_framework.pagination import PageNumberPagination
 
+import logging
+logger = logging.getLogger(__name__)
 
 from .models import Item, CartItems, Reviews, Order
 
@@ -58,11 +60,6 @@ class ItemDetailView(generics.RetrieveUpdateDestroyAPIView):
         context['request'] = self.request
         return context
 
-    # def get_permissions(self):
-    #     if self.request.method in ['PUT', 'PATCH', 'DELETE']:
-    #         return [permissions.IsAdminUser()]
-    #     return [permissions.AllowAny()]
-
     def get_permissions(self):
         if self.request.method == 'GET':
             return [permissions.AllowAny()]  # Allow anyone to view
@@ -93,6 +90,50 @@ class ReviewListCreateView(generics.ListCreateAPIView):
             rslug=self.kwargs['slug'],
             review=self.request.data.get('review')
         )
+
+
+# ADDED THIS VIEW IT NEEDS TO BE ADDED TO THE MAIN ONE
+class ReviewDeleteView(generics.DestroyAPIView):
+    """
+    Admin-only endpoint to delete reviews
+    """
+    queryset = Reviews.objects.all()
+    serializer_class = ReviewSerializer
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            review = self.get_object()
+            review_data = {
+                'id': review.id,
+                'user': review.user.username,
+                'item': review.item.title if review.item else '[Deleted Item]',
+                'review': review.review[:50] + '...' if len(review.review) > 50 else review.review
+            }
+            
+            self.perform_destroy(review)
+            
+            # Log the deletion
+            logger.info(
+                f"Admin {request.user.username} deleted review: {review_data}",
+                extra={'review': review_data}
+            )
+            
+            return Response(
+                {
+                    "detail": "Review deleted successfully",
+                    "deleted_review": review_data
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.error(f"Error deleting review: {str(e)}")
+            return Response(
+                {"error": "Failed to delete review"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # Cart Views
@@ -166,7 +207,6 @@ class RemoveFromCartView(generics.DestroyAPIView):
             {"detail": f"Removed {item_title} from cart"},
             status=status.HTTP_200_OK
         )
-    
 
 
 class OrderCreateView(APIView):
