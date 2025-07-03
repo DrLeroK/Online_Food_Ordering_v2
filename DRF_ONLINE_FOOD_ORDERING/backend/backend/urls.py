@@ -36,6 +36,9 @@ urlpatterns = [
     # User management
     path('user_management/', include('user_management.urls')),
     
+    # Payments
+    path('payments/', include('payments.urls')),
+    
     # Djoser endpoints for password reset
     path('auth/', include('djoser.urls')),  # Main Djoser endpoints
     path('auth/', include('djoser.urls.jwt')),  # JWT-specific endpoints
