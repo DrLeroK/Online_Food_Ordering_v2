@@ -71,199 +71,130 @@ class PaymentInitiateView(APIView):
 
     def post(self, request):
         try:
-            print(f"DEBUG PAYMENT: Received data: {request.data}")
-            print(f"DEBUG PAYMENT: User: {request.user}")
-            
-            amount = request.data.get('amount')
-            print(f"DEBUG PAYMENT: Amount: {amount}")
-            
-            if not amount:
-                return Response(
-                    {"error": "Amount is required"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            cart_items = CartItems.objects.filter(user=request.user, ordered=False)
+            if not cart_items.exists():
+                return Response({"error": "Cart is empty"}, status=400)
 
-            # Generate a unique transaction reference
-            tx_ref = f"chapa-tx-{uuid.uuid4().hex}"
+            # Calculate total amount
+            amount = sum(item.total_price for item in cart_items)
+            tx_ref = f"chapa-{uuid.uuid4().hex}"
 
-            # Determine return URL based on platform
-            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
-            is_mobile_app = 'flutter' in user_agent or 'mobile' in user_agent
-            
-            if is_mobile_app:
-                return_url = f"http://10.0.2.2:8000/payments/success/?status=success&tx_ref={tx_ref}"
-            else:
-                return_url = f"{settings.WEB_APP_URL}/payment-success?status=success&tx_ref={tx_ref}"
+            # Save intent (delivery data) in metadata
+            transaction = PaymentTransaction.objects.create(
+                tx_ref=tx_ref,
+                amount=amount,
+                email=request.user.email,
+                first_name=request.user.first_name or "Customer",
+                last_name=request.user.last_name or "",
+                phone_number=request.user.phone_number,
+                user=request.user,
+                metadata={
+                    "delivery_option": request.data.get("delivery_option", "pickup"),
+                    "delivery_address": request.data.get("delivery_address"),
+                    "delivery_time": request.data.get("delivery_time"),
+                    "pickup_time": request.data.get("pickup_time")
+                }
+            )
 
-            # Check if Chapa API key is available
-            print(f"DEBUG PAYMENT: CHAPA_SECRET_KEY exists: {bool(settings.CHAPA_SECRET_KEY)}")
-            
-            # Use mock payments only if CHAPA_SECRET_KEY is not available
-            if not settings.CHAPA_SECRET_KEY:
-                # For testing purposes, return a mock checkout URL
-                print("Warning: CHAPA_SECRET_KEY not set. Using mock payment for testing.")
-                
-                try:
-                    # Save transaction to DB for testing
-                    transaction = PaymentTransaction.objects.create(
-                        tx_ref=tx_ref,
-                        amount=amount,
-                        email=request.user.email,
-                        first_name=request.user.first_name if request.user.first_name else "Customer",
-                        last_name=request.user.last_name if request.user.last_name else "",
-                        phone_number=request.user.phone_number,
-                        user=request.user
-                    )
-                    print(f"DEBUG PAYMENT: Transaction created with ID: {transaction.id}")
-                    
-                    # Return a mock checkout URL that works with mobile app
-                    mock_checkout_url = f"atlasburger://payment-success?status=success&tx_ref={tx_ref}&order_id={tx_ref}"
-                    print(f"DEBUG PAYMENT: Returning mock checkout URL: {mock_checkout_url}")
-                    return Response({
-                        "checkout_url": mock_checkout_url
-                    })
-                except Exception as transaction_error:
-                    print(f"DEBUG PAYMENT: Transaction creation failed: {transaction_error}")
-                    return Response(
-                        {"error": f"Transaction creation failed: {str(transaction_error)}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            # Return & callback URLs
+            return_url = f"{settings.WEB_APP_URL}/payment-success?tx_ref={tx_ref}"
+            callback_url = f"{settings.DOMAIN_URL}/payments/webhook/"
 
-            # Prepare payload for Chapa API
             payload = {
-                "amount": amount,
+                "amount": str(amount),
                 "currency": "ETB",
-                "email": request.user.email,
-                "first_name": request.user.first_name if request.user.first_name else "Customer",
-                "last_name": request.user.last_name if request.user.last_name else "",
+                "email": transaction.email,
+                "first_name": transaction.first_name,
+                "last_name": transaction.last_name,
+                "phone_number": transaction.phone_number,
                 "tx_ref": tx_ref,
-                "callback_url": settings.CHAPA_WEBHOOK_URL,
+                "callback_url": callback_url,
                 "return_url": return_url,
             }
 
-            if request.user.phone_number:
-                payload["phone_number"] = request.user.phone_number
-
-            print(f"DEBUG PAYMENT: Chapa payload: {payload}")
-            print(f"DEBUG PAYMENT: Chapa API URL: {settings.CHAPA_API_URL}")
-
-            # Headers with API key
             headers = {
                 "Authorization": f"Bearer {settings.CHAPA_SECRET_KEY}",
-                "Content-Type": "application/json",
+                "Content-Type": "application/json"
             }
 
-            # Initialize payment with Chapa API
-            print("DEBUG PAYMENT: Making Chapa API request...")
             response = requests.post(settings.CHAPA_API_URL, json=payload, headers=headers)
-            print(f"DEBUG PAYMENT: Chapa response status: {response.status_code}")
-            print(f"DEBUG PAYMENT: Chapa response: {response.text}")
-            
-            response_data = response.json()
+            data = response.json()
 
-            if response.status_code == 200 and response_data['status'] == 'success':
-                # Save transaction to DB
-                PaymentTransaction.objects.create(
-                    tx_ref=tx_ref,
-                    amount=amount,
-                    email=request.user.email,
-                    first_name=payload['first_name'],
-                    last_name=payload['last_name'],
-                    phone_number=request.user.phone_number,
-                    user=request.user
-                )
-                
-                return Response({
-                    "checkout_url": response_data['data']['checkout_url']
-                })
-            else:
-                print(f"DEBUG PAYMENT: Chapa API failed with status {response.status_code}")
-                print(f"DEBUG PAYMENT: Chapa error response: {response_data}")
-                return Response(
-                    {"error": f"Payment initiation failed: {response_data.get('message', 'Unknown error')}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            if response.status_code != 200 or data.get("status") != "success":
+                return Response({"error": "Failed to initiate payment"}, status=400)
+
+            return Response({
+                "checkout_url": data['data']['checkout_url']
+            })
 
         except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": str(e)}, status=500)
+
 
 @csrf_exempt
 def payment_webhook(request):
-    if request.method in ['POST', 'GET']:
-        # Get transaction reference from callback
-        tx_ref = request.GET.get('trx_ref') or request.POST.get('tx_ref')
-        status = request.GET.get('status') or request.POST.get('status')
-        
-        if not tx_ref:
+    tx_ref = request.GET.get('tx_ref') or request.POST.get('tx_ref')
+    status_param = request.GET.get('status') or request.POST.get('status')
+
+    if not tx_ref:
+        return HttpResponse(status=400)
+
+    try:
+        transaction = PaymentTransaction.objects.select_for_update().get(tx_ref=tx_ref)
+
+        # If already processed
+        if transaction.status == "success":
+            return HttpResponse(status=200)
+
+        # VERIFY payment with Chapa
+        verify_url = f"https://api.chapa.co/v1/transaction/verify/{tx_ref}"
+        headers = {
+            "Authorization": f"Bearer {settings.CHAPA_SECRET_KEY}"
+        }
+        verify_response = requests.get(verify_url, headers=headers).json()
+
+        if verify_response.get("status") != "success":
+            transaction.status = "failed"
+            transaction.save(update_fields=["status"])
             return HttpResponse(status=400)
-        
-        try:
-            # For mock payments, just update the transaction status
-            if status == 'success':
-                transaction = PaymentTransaction.objects.get(tx_ref=tx_ref)
-                transaction.status = "success"
-                transaction.save()
 
-                # Update order status if exists
-                orders = Order.objects.filter(
-                    user=transaction.user,
-                    status='pending',
-                    created_at__gte=timezone.now() - timezone.timedelta(hours=1)
-                ).order_by('-created_at')
+        # CREATE order now (payment is verified)
+        user = transaction.user
+        cart_items = CartItems.objects.filter(user=user, ordered=False)
 
-                if orders.exists():
-                    order = orders.first()
-                    order.status = 'paid'
-                    order.save()
-                
-                # For GET requests (mock payments), redirect to success page
-                if request.method == 'GET':
-                    return redirect(f'/payments/success/?status=success&tx_ref={tx_ref}')
-                
-                return HttpResponse(status=200)
-            else:
-                # For failed payments
-                if request.method == 'GET':
-                    return redirect(f'/payments/failure/?status=failed&tx_ref={tx_ref}')
-                return HttpResponse(status=400)
+        if not cart_items.exists():
+            return HttpResponse(status=400)
 
-        except PaymentTransaction.DoesNotExist:
-            print(f"Transaction not found: {tx_ref}")
-            if request.method == 'GET':
-                return redirect(f'/payments/failure/?error=Transaction not found&tx_ref={tx_ref}')
-            return HttpResponse(status=404)
-        except Exception as e:
-            print(f"Webhook error: {e}")
-            if request.method == 'GET':
-                return redirect(f'/payments/failure/?error=Webhook error&tx_ref={tx_ref}')
-            return HttpResponse(status=500)
+        meta = transaction.metadata
+        order = Order.objects.create(
+            user=user,
+            delivery_option=meta.get('delivery_option', 'pickup'),
+            delivery_address=meta.get('delivery_address'),
+            delivery_time=meta.get('delivery_time'),
+            pickup_time=meta.get('pickup_time'),
+            pickup_branch='atlas1' if meta.get('delivery_option') == 'pickup' else None,
+            total_price=transaction.amount,
+            status='paid'
+        )
 
-    return HttpResponse(status=405)
+        for item in cart_items:
+            item.order = order
+            item.ordered = True
+            item.status = 'Processing'
+            item.ordered_date = timezone.now()
+            item.save()
 
-def payment_success(request):
-    """Payment success page for web users"""
-    tx_ref = request.GET.get('tx_ref')
-    status = request.GET.get('status', 'success')
-    
-    context = {
-        'status': status,
-        'tx_ref': tx_ref,
-    }
-    
-    return render(request, 'payments/payment_success.html', context)
+        # Update transaction
+        transaction.status = 'success'
+        transaction.order = order
+        transaction.save()
 
-def payment_failure(request):
-    """Payment failure page for web users"""
-    tx_ref = request.GET.get('tx_ref')
-    error = request.GET.get('error', 'Payment failed')
-    
-    context = {
-        'status': 'failed',
-        'tx_ref': tx_ref,
-        'error': error,
-    }
-    
-    return render(request, 'payments/payment_success.html', context)
+        if request.method == 'GET':
+            return redirect(f'/payments/success/?status=success&tx_ref={tx_ref}')
+        return HttpResponse(status=200)
+
+    except PaymentTransaction.DoesNotExist:
+        return HttpResponse(status=404)
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return HttpResponse(status=500)
