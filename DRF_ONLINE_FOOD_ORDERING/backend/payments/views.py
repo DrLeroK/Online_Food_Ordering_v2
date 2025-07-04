@@ -9,62 +9,32 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.db import transaction
+import logging
 from core.models import Order, CartItems
 from .models import PaymentTransaction
 
-class PaymentAndOrderCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+logger = logging.getLogger(__name__)
 
-    def post(self, request):
-        try:
-            print(f"DEBUG: Received data: {request.data}")
-            print(f"DEBUG: User: {request.user}")
-            
-            # Get cart items
-            cart_items = CartItems.objects.filter(user=request.user)
-            print(f"DEBUG: Cart items count: {cart_items.count()}")
-            
-            if not cart_items.exists():
-                return Response(
-                    {"error": "Cart is empty"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Create order
-            delivery_option = request.data.get('delivery_option', 'pickup')
-            print(f"DEBUG: Delivery option: {delivery_option}")
-            
-            try:
-                order = Order.objects.create(
-                    user=request.user,
-                    delivery_option=delivery_option,
-                    delivery_address=request.data.get('delivery_address'),
-                    delivery_time=request.data.get('delivery_time'),
-                    pickup_time=request.data.get('pickup_time'),
-                    pickup_branch='atlas1' if delivery_option == 'pickup' else None,  # Set default branch for pickup
-                    total_price=sum(item.item.price * item.quantity for item in cart_items),
-                    status='pending'
-                )
-                print(f"DEBUG: Order created successfully with ID: {order.id}")
-            except Exception as order_error:
-                print(f"DEBUG: Order creation failed: {order_error}")
-                return Response(
-                    {"error": f"Order creation failed: {str(order_error)}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Associate cart items with order
-            for cart_item in cart_items:
-                cart_item.order = order
-                cart_item.save()
-
-            return Response({"order_id": order.id}, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+def create_order_from_cart(user, meta, amount, status='paid'):
+    order = Order.objects.create(
+        user=user,
+        delivery_option=meta.get('delivery_option', 'pickup'),
+        delivery_address=meta.get('delivery_address'),
+        delivery_time=meta.get('delivery_time'),
+        pickup_time=meta.get('pickup_time'),
+        pickup_branch='atlas1' if meta.get('delivery_option') == 'pickup' else None,
+        total_price=amount,
+        status=status
+    )
+    cart_items = CartItems.objects.filter(user=user, ordered=False)
+    for item in cart_items:
+        item.order = order
+        item.ordered = True
+        item.status = 'Processing'
+        item.ordered_date = timezone.now()
+        item.save()
+    return order
 
 class PaymentInitiateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -78,6 +48,12 @@ class PaymentInitiateView(APIView):
             # Calculate total amount
             amount = sum(item.total_price for item in cart_items)
             tx_ref = f"chapa-{uuid.uuid4().hex}"
+
+            # Support dynamic return_url for deeplink/mobile
+            return_url = request.data.get('return_url')
+            if not return_url:
+                return_url = f"{settings.WEB_APP_URL}/payment-success?tx_ref={tx_ref}"
+            callback_url = f"{settings.DOMAIN_URL}/payments/webhook/"
 
             # Save intent (delivery data) in metadata
             transaction = PaymentTransaction.objects.create(
@@ -95,10 +71,6 @@ class PaymentInitiateView(APIView):
                     "pickup_time": request.data.get("pickup_time")
                 }
             )
-
-            # Return & callback URLs
-            return_url = f"{settings.WEB_APP_URL}/payment-success?tx_ref={tx_ref}"
-            callback_url = f"{settings.DOMAIN_URL}/payments/webhook/"
 
             payload = {
                 "amount": str(amount),
@@ -121,80 +93,73 @@ class PaymentInitiateView(APIView):
             data = response.json()
 
             if response.status_code != 200 or data.get("status") != "success":
-                return Response({"error": "Failed to initiate payment"}, status=400)
+                logger.error(f"Failed to initiate payment: {data}")
+                return Response({"error": "Failed to initiate payment", "details": data}, status=400)
 
             return Response({
                 "checkout_url": data['data']['checkout_url']
             })
 
         except Exception as e:
+            logger.error(f"Payment initiation error: {e}")
             return Response({"error": str(e)}, status=500)
 
-
+# webhook for chapa payments
 @csrf_exempt
 def payment_webhook(request):
-    tx_ref = request.GET.get('tx_ref') or request.POST.get('tx_ref')
-    status_param = request.GET.get('status') or request.POST.get('status')
+    from django.views.decorators.http import require_http_methods
+    with transaction.atomic():
+        tx_ref = request.GET.get('tx_ref') or request.POST.get('tx_ref')
+        status_param = request.GET.get('status') or request.POST.get('status')
 
-    if not tx_ref:
-        return HttpResponse(status=400)
+        if not tx_ref:
+            logger.error("Webhook error: Missing tx_ref")
+            return JsonResponse({"error": "Missing tx_ref"}, status=400)
 
-    try:
-        transaction = PaymentTransaction.objects.select_for_update().get(tx_ref=tx_ref)
+        try:
+            transaction_obj = PaymentTransaction.objects.select_for_update().get(tx_ref=tx_ref)
 
-        # If already processed
-        if transaction.status == "success":
-            return HttpResponse(status=200)
+            # If already processed
+            if transaction_obj.status == "success":
+                return JsonResponse({"status": "already processed"}, status=200)
 
-        # VERIFY payment with Chapa
-        verify_url = f"https://api.chapa.co/v1/transaction/verify/{tx_ref}"
-        headers = {
-            "Authorization": f"Bearer {settings.CHAPA_SECRET_KEY}"
-        }
-        verify_response = requests.get(verify_url, headers=headers).json()
+            # VERIFY payment with Chapa
+            verify_url = f"https://api.chapa.co/v1/transaction/verify/{tx_ref}"
+            headers = {
+                "Authorization": f"Bearer {settings.CHAPA_SECRET_KEY}"
+            }
+            verify_response = requests.get(verify_url, headers=headers).json()
 
-        if verify_response.get("status") != "success":
-            transaction.status = "failed"
-            transaction.save(update_fields=["status"])
-            return HttpResponse(status=400)
+            if verify_response.get("status") != "success":
+                transaction_obj.status = "failed"
+                transaction_obj.save(update_fields=["status"])
+                logger.error(f"Payment verification failed: {verify_response}")
+                return JsonResponse({"error": "Payment verification failed", "details": verify_response}, status=400)
 
-        # CREATE order now (payment is verified)
-        user = transaction.user
-        cart_items = CartItems.objects.filter(user=user, ordered=False)
+            # CREATE order now (payment is verified)
+            user = transaction_obj.user
+            cart_items = CartItems.objects.filter(user=user, ordered=False)
 
-        if not cart_items.exists():
-            return HttpResponse(status=400)
+            if not cart_items.exists():
+                logger.error("Webhook error: Cart is empty at order creation")
+                return JsonResponse({"error": "Cart is empty at order creation"}, status=400)
 
-        meta = transaction.metadata
-        order = Order.objects.create(
-            user=user,
-            delivery_option=meta.get('delivery_option', 'pickup'),
-            delivery_address=meta.get('delivery_address'),
-            delivery_time=meta.get('delivery_time'),
-            pickup_time=meta.get('pickup_time'),
-            pickup_branch='atlas1' if meta.get('delivery_option') == 'pickup' else None,
-            total_price=transaction.amount,
-            status='paid'
-        )
+            meta = transaction_obj.metadata
+            order = create_order_from_cart(user, meta, transaction_obj.amount, status='paid')
 
-        for item in cart_items:
-            item.order = order
-            item.ordered = True
-            item.status = 'Processing'
-            item.ordered_date = timezone.now()
-            item.save()
+            # Update transaction
+            transaction_obj.status = 'success'
+            transaction_obj.order = order
+            transaction_obj.save()
 
-        # Update transaction
-        transaction.status = 'success'
-        transaction.order = order
-        transaction.save()
+            # Redirect for GET (browser) requests, JSON for POST (API) requests
+            if request.method == 'GET':
+                return redirect(f'/payments/success/?status=success&tx_ref={tx_ref}')
+            return JsonResponse({"status": "success", "order_id": order.id})
 
-        if request.method == 'GET':
-            return redirect(f'/payments/success/?status=success&tx_ref={tx_ref}')
-        return HttpResponse(status=200)
-
-    except PaymentTransaction.DoesNotExist:
-        return HttpResponse(status=404)
-    except Exception as e:
-        print(f"Webhook error: {e}")
-        return HttpResponse(status=500)
+        except PaymentTransaction.DoesNotExist:
+            logger.error(f"Webhook error: Transaction not found for tx_ref {tx_ref}")
+            return JsonResponse({"error": "Transaction not found"}, status=404)
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
