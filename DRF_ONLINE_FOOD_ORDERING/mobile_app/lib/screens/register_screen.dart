@@ -24,10 +24,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   String? _errorMessage;
+  bool _isFormValid = false;
   
   // Field validation states
   Map<String, bool> _fieldErrors = {};
   Map<String, String> _fieldErrorMessages = {};
+  
+  // Password validation state
+  Map<String, bool> _passwordRequirements = {
+    'length': false,
+    'number': false,
+    'specialChar': false,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_validatePasswordRealtime);
+    _confirmPasswordController.addListener(_validateFormRealtime);
+  }
 
   @override
   void dispose() {
@@ -41,11 +56,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  void _validateFormRealtime() {
+    final isUsernameValid = _validateUsername(_usernameController.text) == null;
+    final isFirstNameValid = _validateFirstName(_firstNameController.text) == null;
+    final isLastNameValid = _validateLastName(_lastNameController.text) == null;
+    final isEmailValid = _validateEmail(_emailController.text) == null;
+    final isPhoneValid = _validatePhone(_phoneController.text) == null;
+    final isPasswordValid = _passwordRequirements.values.every((valid) => valid);
+    final doPasswordsMatch = _passwordController.text == _confirmPasswordController.text && 
+                           _passwordController.text.isNotEmpty;
+
+    setState(() {
+      _isFormValid = isUsernameValid &&
+                     isFirstNameValid &&
+                     isLastNameValid &&
+                     isEmailValid &&
+                     isPhoneValid &&
+                     isPasswordValid &&
+                     doPasswordsMatch;
+    });
+  }
+
+  void _validatePasswordRealtime() {
+    final password = _passwordController.text;
+    setState(() {
+      _passwordRequirements['length'] = password.length >= 8;
+      _passwordRequirements['number'] = RegExp(r'\d').hasMatch(password);
+      _passwordRequirements['specialChar'] = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password);
+    });
+    _validateFormRealtime();
+  }
+
   void _clearFieldError(String fieldName) {
     setState(() {
       _fieldErrors[fieldName] = false;
       _fieldErrorMessages.remove(fieldName);
     });
+    _validateFormRealtime();
   }
 
   void _setFieldError(String fieldName, String message) {
@@ -53,6 +100,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _fieldErrors[fieldName] = true;
       _fieldErrorMessages[fieldName] = message;
     });
+    _validateFormRealtime();
+  }
+
+  String _formatPhoneNumber(String value) {
+    if (value.isEmpty) return value;
+    
+    // Remove all non-digits
+    final cleaned = value.replaceAll(RegExp(r'\D'), '');
+    
+    // Format as XXX-XXX-XXXX
+    if (cleaned.length <= 3) {
+      return cleaned;
+    } else if (cleaned.length <= 6) {
+      return '${cleaned.substring(0, 3)}-${cleaned.substring(3)}';
+    } else {
+      return '${cleaned.substring(0, 3)}-${cleaned.substring(3, 6)}-${cleaned.substring(6, cleaned.length > 10 ? 10 : cleaned.length)}';
+    }
   }
 
   String? _validateUsername(String? value) {
@@ -111,7 +175,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _setFieldError('email', 'Please enter your email');
       return 'Please enter your email';
     }
-    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value)) {
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)) {
       _setFieldError('email', 'Please enter a valid email address');
       return 'Please enter a valid email address';
     }
@@ -124,10 +188,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _setFieldError('phone', 'Please enter your phone number');
       return 'Please enter your phone number';
     }
-    // Match the backend validation: ^\+?1?\d{9,15}$
-    if (!RegExp(r'^\+?1?\d{9,15}$').hasMatch(value.replaceAll(RegExp(r'[\s\-\(\)]'), ''))) {
-      _setFieldError('phone', 'Phone number must be in format: +999999999 (9-15 digits)');
-      return 'Phone number must be in format: +999999999 (9-15 digits)';
+    final cleaned = value.replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length < 10) {
+      _setFieldError('phone', 'Phone number must be at least 10 digits');
+      return 'Phone number must be at least 10 digits';
     }
     _clearFieldError('phone');
     return null;
@@ -138,13 +202,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _setFieldError('password', 'Please enter your password');
       return 'Please enter your password';
     }
-    if (value.length < 6) {
-      _setFieldError('password', 'Password must be at least 6 characters');
-      return 'Password must be at least 6 characters';
-    }
-    if (!RegExp(r'^(?=.*[A-Za-z])(?=.*\d)').hasMatch(value)) {
-      _setFieldError('password', 'Password must contain both letters and numbers');
-      return 'Password must contain both letters and numbers';
+    if (!_passwordRequirements.values.every((valid) => valid)) {
+      _setFieldError('password', 'Password does not meet requirements');
+      return 'Password does not meet requirements';
     }
     _clearFieldError('password');
     return null;
@@ -206,7 +266,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _firstNameController.text.trim(),
         _lastNameController.text.trim(),
         _emailController.text.trim(),
-        _phoneController.text.trim(),
+        _phoneController.text.replaceAll(RegExp(r'\D'), ''), // Remove formatting
         _passwordController.text,
       );
 
@@ -237,23 +297,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Colors.red, Colors.redAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.person_add,
+            size: 40,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 20),
         const Text(
-          'Create Account',
+          'Create Your Account',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
+            color: Colors.black87,
           ),
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         const Text(
-          'Fill in your details to get started',
+          'Join our burger community today',
           style: TextStyle(
             fontSize: 16,
             color: Colors.grey,
           ),
+          textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 30),
       ],
     );
   }
@@ -265,24 +352,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         if (_errorMessage != null)
           Container(
-            padding: const EdgeInsets.all(12),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade200),
             ),
-            child: Text(
-              _errorMessage!,
-              style: TextStyle(color: Colors.red.shade900),
-              textAlign: TextAlign.center,
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red.shade900, fontSize: 14),
+                  ),
+                ),
+              ],
             ),
           ),
         if (_fieldErrorMessages.isNotEmpty) ...[
-          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.all(12),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.orange.shade200),
             ),
             child: Column(
@@ -291,27 +389,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Row(
                   children: [
                     Icon(Icons.warning_amber, color: Colors.orange.shade700, size: 20),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Text(
                       'Please fix the following errors:',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.orange.shade700,
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 ..._fieldErrorMessages.entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
+                  padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('• ', style: TextStyle(color: Colors.orange.shade700)),
+                      Text('• ', style: TextStyle(color: Colors.orange.shade700, fontSize: 14)),
                       Expanded(
                         child: Text(
                           '${_getFieldDisplayName(entry.key)}: ${entry.value}',
-                          style: TextStyle(color: Colors.orange.shade700),
+                          style: TextStyle(color: Colors.orange.shade700, fontSize: 14),
                         ),
                       ),
                     ],
@@ -321,7 +420,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -347,31 +445,91 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Widget _buildUsernameField() {
-    return TextFormField(
-      controller: _usernameController,
-      decoration: InputDecoration(
-        labelText: 'Username',
-        hintText: 'e.g. johndoe123',
-        prefixIcon: const Icon(Icons.person_outline),
-        errorText: _fieldErrors['username'] == true ? _fieldErrorMessages['username'] : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(
-            color: _fieldErrors['username'] == true ? Colors.red : Colors.blue,
-            width: 2,
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required String? Function(String?) validator,
+    required void Function(String) onChanged,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onToggleVisibility,
+    TextInputType? keyboardType,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
           ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextFormField(
+              controller: controller,
+              obscureText: obscureText,
+              keyboardType: keyboardType,
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
+                suffixIcon: isPassword
+                    ? IconButton(
+                        icon: Icon(
+                          obscureText ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        onPressed: onToggleVisibility,
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.red, width: 2),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.red, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
+              onChanged: onChanged,
+              validator: validator,
+            ),
+          ),
+          if (_fieldErrors[label.toLowerCase().replaceAll(' ', '')] == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 4),
+              child: Text(
+                _fieldErrorMessages[label.toLowerCase().replaceAll(' ', '')] ?? '',
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+        ],
       ),
-      onChanged: (value) => _validateUsername(value),
-      validator: _validateUsername,
     );
   }
 
@@ -379,249 +537,205 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Row(
       children: [
         Expanded(
-          child: TextFormField(
+          child: _buildInputField(
             controller: _firstNameController,
-            decoration: InputDecoration(
-              labelText: 'First Name',
-              hintText: 'e.g. John',
-              errorText: _fieldErrors['firstName'] == true ? _fieldErrorMessages['firstName'] : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: _fieldErrors['firstName'] == true ? Colors.red : Colors.blue,
-                  width: 2,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              ),
-            ),
-            onChanged: (value) => _validateFirstName(value),
+            label: 'First Name',
+            hint: 'e.g. John',
+            icon: Icons.person_outline,
             validator: _validateFirstName,
+            onChanged: (value) => _validateFirstName(value),
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: TextFormField(
+          child: _buildInputField(
             controller: _lastNameController,
-            decoration: InputDecoration(
-              labelText: 'Last Name',
-              hintText: 'e.g. Doe',
-              errorText: _fieldErrors['lastName'] == true ? _fieldErrorMessages['lastName'] : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: _fieldErrors['lastName'] == true ? Colors.red : Colors.blue,
-                  width: 2,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              ),
-            ),
-            onChanged: (value) => _validateLastName(value),
+            label: 'Last Name',
+            hint: 'e.g. Doe',
+            icon: Icons.person_outline,
             validator: _validateLastName,
+            onChanged: (value) => _validateLastName(value),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildEmailField() {
-    return TextFormField(
-      controller: _emailController,
-      decoration: InputDecoration(
-        labelText: 'Email',
-        hintText: 'e.g. johndoe@email.com',
-        prefixIcon: const Icon(Icons.email_outlined),
-        errorText: _fieldErrors['email'] == true ? _fieldErrorMessages['email'] : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(
-            color: _fieldErrors['email'] == true ? Colors.red : Colors.blue,
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
-      ),
-      keyboardType: TextInputType.emailAddress,
-      onChanged: (value) => _validateEmail(value),
-      validator: _validateEmail,
-    );
-  }
-
-  Widget _buildPhoneField() {
-    return TextFormField(
-      controller: _phoneController,
-      decoration: InputDecoration(
-        labelText: 'Phone Number',
-        hintText: 'e.g. +1234567890',
-        prefixIcon: const Icon(Icons.phone_outlined),
-        errorText: _fieldErrors['phone'] == true ? _fieldErrorMessages['phone'] : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(
-            color: _fieldErrors['phone'] == true ? Colors.red : Colors.blue,
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
-      ),
-      keyboardType: TextInputType.phone,
-      onChanged: (value) => _validatePhone(value),
-      validator: _validatePhone,
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return TextFormField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      decoration: InputDecoration(
-        labelText: 'Password',
-        prefixIcon: const Icon(Icons.lock_outline),
-        errorText: _fieldErrors['password'] == true ? _fieldErrorMessages['password'] : null,
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscurePassword ? Icons.visibility_off : Icons.visibility,
-            color: Colors.grey,
-          ),
-          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(
-            color: _fieldErrors['password'] == true ? Colors.red : Colors.blue,
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
-      ),
-      onChanged: (value) => _validatePassword(value),
-      validator: _validatePassword,
-    );
-  }
-
-  Widget _buildConfirmPasswordField() {
-    return TextFormField(
-      controller: _confirmPasswordController,
-      obscureText: _obscureConfirmPassword,
-      decoration: InputDecoration(
-        labelText: 'Confirm Password',
-        prefixIcon: const Icon(Icons.lock_outline),
-        errorText: _fieldErrors['confirmPassword'] == true ? _fieldErrorMessages['confirmPassword'] : null,
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-            color: Colors.grey,
-          ),
-          onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(
-            color: _fieldErrors['confirmPassword'] == true ? Colors.red : Colors.blue,
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
-      ),
-      onChanged: (value) => _validateConfirmPassword(value),
-      validator: _validateConfirmPassword,
-    );
-  }
-
   Widget _buildPasswordRequirements() {
     return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Password Requirements:',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Password Requirements:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade700,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 4),
-          Text('• At least 6 characters'),
-          Text('• Include letters and numbers'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(
+                _passwordRequirements['length']! ? Icons.check_circle : Icons.cancel,
+                color: _passwordRequirements['length']! ? Colors.green : Colors.red,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'At least 8 characters',
+                style: TextStyle(
+                  color: _passwordRequirements['length']! ? Colors.green : Colors.red,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                _passwordRequirements['number']! ? Icons.check_circle : Icons.cancel,
+                color: _passwordRequirements['number']! ? Colors.green : Colors.red,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Contains a number',
+                style: TextStyle(
+                  color: _passwordRequirements['number']! ? Colors.green : Colors.red,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                _passwordRequirements['specialChar']! ? Icons.check_circle : Icons.cancel,
+                color: _passwordRequirements['specialChar']! ? Colors.green : Colors.red,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Contains a special character',
+                style: TextStyle(
+                  color: _passwordRequirements['specialChar']! ? Colors.green : Colors.red,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildSubmitButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _submitForm,
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size.fromHeight(50),
+    return Container(
+      width: double.infinity,
+      height: 56,
+      margin: const EdgeInsets.only(top: 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: _isFormValid ? Colors.red.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: _isLoading
-          ? const SizedBox(
-              height: 24,
-              width: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+      child: ElevatedButton(
+        onPressed: (_isLoading || !_isFormValid) ? null : _submitForm,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _isFormValid ? Colors.red : Colors.grey.shade400,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Text(
+                'Create Account',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            )
-          : const Text(
-              'Create Account',
-              style: TextStyle(fontSize: 16),
-            ),
+      ),
     );
   }
 
   Widget _buildLoginLink() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
         children: [
-          const Text('Already have an account?'),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-            child: const Text('Sign In'),
+          const Text(
+            'Already have an account?',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.grey.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                backgroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Sign In',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -631,9 +745,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-      ),
+      backgroundColor: Colors.grey.shade50,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -643,22 +755,85 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
-                _buildErrorMessage(),
-                _buildUsernameField(),
-                const SizedBox(height: 16),
-                _buildNameFields(),
-                const SizedBox(height: 16),
-                _buildEmailField(),
-                const SizedBox(height: 16),
-                _buildPhoneField(),
-                const SizedBox(height: 16),
-                _buildPasswordField(),
-                const SizedBox(height: 16),
-                _buildConfirmPasswordField(),
-                const SizedBox(height: 16),
-                _buildPasswordRequirements(),
-                const SizedBox(height: 24),
-                _buildSubmitButton(),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _buildErrorMessage(),
+                      _buildInputField(
+                        controller: _usernameController,
+                        label: 'Username',
+                        hint: 'e.g. johndoe123',
+                        icon: Icons.person_outline,
+                        validator: _validateUsername,
+                        onChanged: (value) => _validateUsername(value),
+                      ),
+                      _buildNameFields(),
+                      _buildInputField(
+                        controller: _emailController,
+                        label: 'Email',
+                        hint: 'e.g. johndoe@email.com',
+                        icon: Icons.email_outlined,
+                        validator: _validateEmail,
+                        onChanged: (value) => _validateEmail(value),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      _buildInputField(
+                        controller: _phoneController,
+                        label: 'Phone Number',
+                        hint: 'e.g. 091-234-5678',
+                        icon: Icons.phone_outlined,
+                        validator: _validatePhone,
+                        onChanged: (value) {
+                          final formatted = _formatPhoneNumber(value);
+                          if (formatted != value) {
+                            _phoneController.value = TextEditingValue(
+                              text: formatted,
+                              selection: TextSelection.collapsed(offset: formatted.length),
+                            );
+                          }
+                          _validatePhone(formatted);
+                        },
+                        keyboardType: TextInputType.phone,
+                      ),
+                      _buildInputField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        hint: 'Your password',
+                        icon: Icons.lock_outline,
+                        validator: _validatePassword,
+                        onChanged: (value) => _validatePasswordRealtime(),
+                        isPassword: true,
+                        obscureText: _obscurePassword,
+                        onToggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                      _buildPasswordRequirements(),
+                      _buildInputField(
+                        controller: _confirmPasswordController,
+                        label: 'Confirm Password',
+                        hint: 'Confirm your password',
+                        icon: Icons.lock_outline,
+                        validator: _validateConfirmPassword,
+                        onChanged: (value) => _validateConfirmPassword(value),
+                        isPassword: true,
+                        obscureText: _obscureConfirmPassword,
+                        onToggleVisibility: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      ),
+                      _buildSubmitButton(),
+                    ],
+                  ),
+                ),
                 _buildLoginLink(),
               ],
             ),

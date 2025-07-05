@@ -16,25 +16,81 @@ from .models import PaymentTransaction
 
 logger = logging.getLogger(__name__)
 
-def create_order_from_cart(user, meta, amount, status='paid'):
-    order = Order.objects.create(
-        user=user,
-        delivery_option=meta.get('delivery_option', 'pickup'),
-        delivery_address=meta.get('delivery_address'),
-        delivery_time=meta.get('delivery_time'),
-        pickup_time=meta.get('pickup_time'),
-        pickup_branch='atlas1' if meta.get('delivery_option') == 'pickup' else None,
-        total_price=amount,
-        status=status
-    )
-    cart_items = CartItems.objects.filter(user=user, ordered=False)
-    for item in cart_items:
-        item.order = order
-        item.ordered = True
-        item.status = 'Processing'
-        item.ordered_date = timezone.now()
-        item.save()
-    return order
+from django.utils import timezone
+from django.db import transaction
+from core.models import CartItems, Order
+
+def create_order_from_cart(user, data):
+    """
+    Creates an order from user's cart items and clears them.
+    
+    Parameters:
+        user: User instance
+        data: dict containing delivery_option, times, address, location, branch
+    
+    Returns:
+        Order instance
+    Raises:
+        ValueError: if cart is empty or validation fails
+    """
+
+    with transaction.atomic():
+        cart_items = list(
+            CartItems.objects.select_for_update()
+            .filter(user=user, ordered=False)
+            .select_related('item')
+        )
+
+        if not cart_items:
+            raise ValueError("Your cart is empty")
+
+        delivery_option = data.get('delivery_option', 'pickup')
+        delivery_time = data.get('delivery_time')
+        pickup_time = data.get('pickup_time')
+        delivery_address = data.get('delivery_address', '')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        pickup_branch = data.get('pickup_branch')
+
+        now = timezone.now()
+        if delivery_option == 'pickup' and not pickup_time:
+            pickup_time = now
+        elif delivery_option == 'delivery' and not delivery_time:
+            delivery_time = now
+
+        if delivery_option == 'delivery' and not delivery_address and not (latitude and longitude):
+            raise ValueError("Delivery address or coordinates required for delivery")
+
+        if delivery_option == 'pickup' and not pickup_branch:
+            raise ValueError("Pickup branch is required for pickup orders")
+
+        total_price = sum(item.quantity * item.item.price for item in cart_items)
+
+        order = Order.objects.create(
+            user=user,
+            delivery_option=delivery_option,
+            pickup_time=pickup_time,
+            delivery_time=delivery_time,
+            delivery_address=delivery_address if delivery_option == 'delivery' else None,
+            latitude=latitude if delivery_option == 'delivery' else None,
+            longitude=longitude if delivery_option == 'delivery' else None,
+            pickup_branch=pickup_branch if delivery_option == 'pickup' else None,
+            total_price=total_price
+        )
+
+        for item in cart_items:
+            item.ordered = True
+            item.order = order
+            item.status = 'Active'
+            item.ordered_date = timezone.now()
+            item.save()
+
+        # Increment score
+        user.score += 1
+        user.save()
+
+        return order
+
 
 class PaymentInitiateView(APIView):
     permission_classes = [IsAuthenticated]

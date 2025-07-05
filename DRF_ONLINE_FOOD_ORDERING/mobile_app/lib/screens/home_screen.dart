@@ -85,6 +85,216 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _showMenuDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Menu',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildMenuOption(
+                icon: Icons.person,
+                title: 'Profile',
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _selectedIndex = 3; // Profile tab
+                  });
+                },
+              ),
+              const Divider(),
+              _buildMenuOption(
+                icon: Icons.info,
+                title: 'About',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAboutDialog();
+                },
+              ),
+              const Divider(),
+              _buildMenuOption(
+                icon: Icons.contact_support,
+                title: 'Contact',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showContactDialog();
+                },
+              ),
+              const Divider(),
+              _buildMenuOption(
+                icon: Icons.logout,
+                title: 'Sign Out',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSignOutDialog();
+                },
+                isDestructive: true,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMenuOption({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isDestructive ? Colors.red : Colors.grey[700],
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isDestructive ? Colors.red : Colors.black87,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'About Atlas Cafe',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          content: const Text(
+            'Atlas Cafe is your premier destination for delicious food and exceptional dining experiences. '
+            'We pride ourselves on serving fresh, high-quality ingredients in a warm and welcoming atmosphere.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showContactDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Contact Us',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildContactInfo(Icons.phone, '+251 911 123 456'),
+              const SizedBox(height: 12),
+              _buildContactInfo(Icons.email, 'info@atlas-cafe.com'),
+              const SizedBox(height: 12),
+              _buildContactInfo(Icons.location_on, 'Addis Ababa, Ethiopia'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildContactInfo(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.grey[600]),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showSignOutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Sign Out',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          content: const Text(
+            'Are you sure you want to sign out?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                context.read<AuthProvider>().logout();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildFeaturedPromos() {
     return SizedBox(
       height: 150, // Adjust height as needed
@@ -121,32 +331,43 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoryBar() {
-    return SizedBox(
-      height: 48,
-      child: ListView.separated(
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final category = _categories[index];
           final isSelected = _selectedCategory == category['value'];
-          return ChoiceChip(
-            label: Text(category['label']!,
+          return Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: FilterChip(
+              label: Text(
+                category['label']!,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.black,
-                  fontWeight: FontWeight.bold,
-                )),
-            selected: isSelected,
-            selectedColor: Colors.redAccent,
-            backgroundColor: Colors.grey[200],
-            onSelected: (_) {
-              if (mounted) {
-                setState(() {
-                  _selectedCategory = category['value']!;
-                });
-              }
-            },
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              selected: isSelected,
+              selectedColor: Colors.red[600],
+              backgroundColor: Colors.grey[200],
+              checkmarkColor: Colors.white,
+              onSelected: (_) {
+                if (mounted) {
+                  setState(() {
+                    _selectedCategory = category['value']!;
+                  });
+                }
+              },
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: isSelected ? 2 : 0,
+            ),
           );
         },
       ),
@@ -175,25 +396,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 )
-              : Column(
-                  children: [
-                    _buildFeaturedPromos(),
-                    _buildCategoryBar(),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Our Menu',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+              : SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildFeaturedPromos(),
+                      _buildCategoryBar(),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Our Menu',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: GridView.builder(
+                      const SizedBox(height: 16),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(16),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
@@ -213,8 +437,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           return _MenuItemCard(item: item);
                         },
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 100), // Bottom padding for bottom navigation
+                    ],
+                  ),
                 ),
     );
   }
@@ -255,10 +480,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: () {
-                    context.read<AuthProvider>().logout();
-                  },
+                  icon: const Icon(Icons.menu),
+                  onPressed: _showMenuDialog,
                 ),
               ],
             )

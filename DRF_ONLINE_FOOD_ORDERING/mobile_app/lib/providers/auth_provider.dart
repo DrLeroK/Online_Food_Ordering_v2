@@ -36,8 +36,13 @@ class AuthProvider with ChangeNotifier {
     await _apiService.forgotPassword(email);
   }
 
-  Future<bool> resetPassword(String uid, String token, String newPassword) async {
-    return await _apiService.resetPassword(uid, token, newPassword);
+  Future<Map<String, dynamic>> resetPassword(String uid, String token, String newPassword, String confirmPassword) async {
+    try {
+      final success = await _apiService.resetPassword(uid, token, newPassword);
+      return {'success': success, 'error': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
   }
 
   Future<void> checkAuthStatus() async {
