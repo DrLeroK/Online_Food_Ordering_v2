@@ -152,10 +152,13 @@ def payment_webhook(request):
             transaction_obj.order = order
             transaction_obj.save()
 
-            # Redirect for GET (browser) requests, JSON for POST (API) requests
-            if request.method == 'GET':
-                return redirect(f'/payments/success/?status=success&tx_ref={tx_ref}')
-            return JsonResponse({"status": "success", "order_id": order.id})
+            # Return JSON response for all requests (API-first approach)
+            return JsonResponse({
+                "status": "success", 
+                "order_id": order.id,
+                "tx_ref": tx_ref,
+                "redirect_url": f"{settings.WEB_APP_URL}/payment-success?tx_ref={tx_ref}&status=success"
+            })
 
         except PaymentTransaction.DoesNotExist:
             logger.error(f"Webhook error: Transaction not found for tx_ref {tx_ref}")
@@ -163,3 +166,27 @@ def payment_webhook(request):
         except Exception as e:
             logger.error(f"Webhook error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
+
+def payment_success(request):
+    """Handle payment success - return JSON for React frontend"""
+    tx_ref = request.GET.get('tx_ref')
+    status = request.GET.get('status')
+    
+    return JsonResponse({
+        'status': 'success',
+        'tx_ref': tx_ref,
+        'message': 'Payment completed successfully',
+        'redirect_url': f"{settings.WEB_APP_URL}/payment-success?tx_ref={tx_ref}&status=success"
+    })
+
+def payment_failure(request):
+    """Handle payment failure - return JSON for React frontend"""
+    tx_ref = request.GET.get('tx_ref')
+    error = request.GET.get('error', 'Payment failed')
+    
+    return JsonResponse({
+        'status': 'failed',
+        'tx_ref': tx_ref,
+        'error': error,
+        'redirect_url': f"{settings.WEB_APP_URL}/payment-failure?tx_ref={tx_ref}&error={error}"
+    })
